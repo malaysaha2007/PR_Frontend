@@ -12,14 +12,13 @@ import {
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 
-const API_BASE = "http://10.14.39.248:5000";
+const config = require('../../apiConfig.json');
 
 export default function HomeScreen() {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const cameraRef = useRef<CameraView | null>(null);
 
   const [cameraActive, setCameraActive] = useState(false);
-
   const [showModal, setShowModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
@@ -38,17 +37,14 @@ export default function HomeScreen() {
     })();
   }, []);
 
-  // ⏱ Auto stop camera after 20 sec
   useEffect(() => {
     let timer: NodeJS.Timeout;
-
     if (cameraActive) {
       timer = setTimeout(() => {
         setCameraActive(false);
         setIsScanning(false);
       }, 20000);
     }
-
     return () => {
       if (timer) clearTimeout(timer);
     };
@@ -56,7 +52,6 @@ export default function HomeScreen() {
 
   const takePhoto = async () => {
     if (!cameraRef.current || isScanning) return;
-
     setIsScanning(true);
 
     try {
@@ -68,9 +63,12 @@ export default function HomeScreen() {
       setPhotoUri(photo.uri);
 
       const response = await axios.post(
-        `${API_BASE}/api/recognize-face`,
+        `${config.API_BASE}/api/recognize-face`,   // ✅ FIXED ROUTE
         { image: photo.base64 },
-        { timeout: 15000 },
+        {
+          timeout: 15000,
+          headers: { "Content-Type": "application/json" },
+        }
       );
 
       const data = response.data;
@@ -87,6 +85,7 @@ export default function HomeScreen() {
 
       setStudentData(data);
       setShowModal(true);
+
     } catch (err: any) {
       console.log("SCAN ERROR:", err?.message);
       Alert.alert("Error", "Backend not reachable");
@@ -107,13 +106,16 @@ export default function HomeScreen() {
 
     try {
       await axios.post(
-        `${API_BASE}/api/confirm-entry-exit`,
+        `${config.API_BASE}/api/confirm-entry-exit`,   // ✅ FIXED
         {
           student: studentData.student,
           action: studentData.action,
           purpose: studentData.action === "EXIT" ? purpose : null,
         },
-        { timeout: 15000 },
+        {
+          timeout: 15000,
+          headers: { "Content-Type": "application/json" },
+        }
       );
 
       const timeNow = new Date().toLocaleString();
@@ -121,23 +123,21 @@ export default function HomeScreen() {
       setSavedData({
         ...studentData.student,
         action: studentData.action,
-
         purpose:
           studentData.action === "EXIT"
             ? purpose
             : studentData.last_exit?.purpose,
-
         outTime:
           studentData.action === "EXIT"
             ? timeNow
             : studentData.last_exit?.outTime,
-
         inTime: studentData.action === "ENTRY" ? timeNow : null,
       });
 
       setShowModal(false);
       setShowSuccessModal(true);
       setPurpose("");
+
     } catch (err: any) {
       console.log("CONFIRM ERROR:", err?.message);
       Alert.alert("Error", "Failed to save entry / exit");
@@ -152,6 +152,9 @@ export default function HomeScreen() {
 
   return (
     <View style={{ flex: 1 }}>
+
+
+
       {/* HEADER */}
       <View style={styles.header}>
         <Image source={require("./iiitdmj_logo.jpg")} style={styles.logo} />
