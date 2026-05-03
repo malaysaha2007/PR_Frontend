@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 
-const config = require('../../apiConfig.json');
+const config = require("../../apiConfig.json");
 
 export default function HomeScreen() {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
@@ -29,7 +29,9 @@ export default function HomeScreen() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [serverStatus, setServerStatus] = useState("checking");
 
+  // CAMERA PERMISSION
   useEffect(() => {
     (async () => {
       const { status } = await Camera.requestCameraPermissionsAsync();
@@ -37,8 +39,26 @@ export default function HomeScreen() {
     })();
   }, []);
 
+  // ✅ SERVER STATUS CHECK (NEW)
   useEffect(() => {
-    let timer: NodeJS.Timeout;
+    const checkServer = async () => {
+      try {
+        await axios.get(`${config.API_BASE}`);
+        setServerStatus("online");
+      } catch {
+        setServerStatus("offline");
+      }
+    };
+
+    checkServer();
+    const interval = setInterval(checkServer, 10000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // CAMERA AUTO STOP
+  useEffect(() => {
+let timer: any;
     if (cameraActive) {
       timer = setTimeout(() => {
         setCameraActive(false);
@@ -63,7 +83,7 @@ export default function HomeScreen() {
       setPhotoUri(photo.uri);
 
       const response = await axios.post(
-        `${config.API_BASE}/api/recognize-face`,   // ✅ FIXED ROUTE
+        `${config.API_BASE}/api/recognize-face`,
         { image: photo.base64 },
         {
           timeout: 15000,
@@ -85,7 +105,6 @@ export default function HomeScreen() {
 
       setStudentData(data);
       setShowModal(true);
-
     } catch (err: any) {
       console.log("SCAN ERROR:", err?.message);
       Alert.alert("Error", "Backend not reachable");
@@ -106,7 +125,7 @@ export default function HomeScreen() {
 
     try {
       await axios.post(
-        `${config.API_BASE}/api/confirm-entry-exit`,   // ✅ FIXED
+        `${config.API_BASE}/api/confirm-entry-exit`,
         {
           student: studentData.student,
           action: studentData.action,
@@ -137,7 +156,6 @@ export default function HomeScreen() {
       setShowModal(false);
       setShowSuccessModal(true);
       setPurpose("");
-
     } catch (err: any) {
       console.log("CONFIRM ERROR:", err?.message);
       Alert.alert("Error", "Failed to save entry / exit");
@@ -152,17 +170,43 @@ export default function HomeScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-
-
-
       {/* HEADER */}
       <View style={styles.header}>
         <Image source={require("./iiitdmj_logo.jpg")} style={styles.logo} />
+
         <View>
-          <Text style={styles.headerTitle}>PDPM IIITDMJ Entry–Exit Portal</Text>
-          <Text style={styles.headerSubtitle}>Student Monitoring System</Text>
+          <Text style={styles.headerTitle}>
+            PDPM IIITDMJ Entry–Exit Portal
+          </Text>
+          <Text style={styles.headerSubtitle}>
+            Student Monitoring System
+          </Text>
+        </View>
+
+        {/* ✅ SERVER STATUS UI */}
+        <View style={{ marginLeft: "auto" }}>
+          <Text
+            style={{
+              color:
+                serverStatus === "online"
+                  ? "lightgreen"
+                  : serverStatus === "offline"
+                  ? "red"
+                  : "yellow",
+              fontWeight: "bold",
+              fontSize: 12,
+            }}
+          >
+            ●{" "}
+            {serverStatus === "checking"
+              ? "Checking..."
+              : serverStatus === "online"
+              ? "Online"
+              : "Offline"}
+          </Text>
         </View>
       </View>
+
       {/* CAMERA CONTROL */}
       {cameraActive ? (
         <>
@@ -187,14 +231,32 @@ export default function HomeScreen() {
         </>
       ) : (
         <View style={styles.startContainer}>
+          {/* ✅ MODIFIED BUTTON */}
           <TouchableOpacity
-            style={styles.startBtn}
-            onPress={() => setCameraActive(true)}
+            style={[
+              styles.startBtn,
+              serverStatus !== "online" && { opacity: 0.5 },
+            ]}
+            onPress={() => {
+              if (serverStatus === "online") {
+                setCameraActive(true);
+              } else {
+                Alert.alert("Server Offline", "Backend is not reachable");
+              }
+            }}
+            disabled={serverStatus !== "online"}
           >
-            <Text style={styles.btnText}>Start Camera</Text>
+            <Text style={styles.btnText}>
+              {serverStatus === "checking"
+                ? "Checking..."
+                : serverStatus === "online"
+                ? "Start Camera"
+                : "Server Offline"}
+            </Text>
           </TouchableOpacity>
         </View>
       )}
+
       {/* VERIFY MODAL */}
       <Modal visible={showModal} transparent animationType="fade">
         <View style={styles.overlay}>
