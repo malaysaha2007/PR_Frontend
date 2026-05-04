@@ -16,7 +16,7 @@ const config = require("../../apiConfig.json");
 
 export default function HomeScreen() {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const cameraRef = useRef<CameraView | null>(null);
+  const cameraRef = useRef<any>(null);
 
   const [cameraActive, setCameraActive] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -39,26 +39,38 @@ export default function HomeScreen() {
     })();
   }, []);
 
-  // ✅ SERVER STATUS CHECK (NEW)
+  // SERVER CHECK FUNCTION
+  const checkServer = async () => {
+    if (serverStatus === "checking") return;
+
+    try {
+      setServerStatus("checking");
+      await axios.get(`${config.API_BASE}`, { timeout: 5000 });
+      setServerStatus("online");
+    } catch {
+      setServerStatus("offline");
+    }
+  };
+
+  // AUTO CHECK
   useEffect(() => {
-    const checkServer = async () => {
+    const init = async () => {
       try {
-        await axios.get(`${config.API_BASE}`);
+        await axios.get(`${config.API_BASE}`, { timeout: 5000 });
         setServerStatus("online");
       } catch {
         setServerStatus("offline");
       }
     };
 
-    checkServer();
+    init();
     const interval = setInterval(checkServer, 10000);
-
     return () => clearInterval(interval);
   }, []);
 
   // CAMERA AUTO STOP
   useEffect(() => {
-let timer: any;
+    let timer: any;
     if (cameraActive) {
       timer = setTimeout(() => {
         setCameraActive(false);
@@ -85,10 +97,7 @@ let timer: any;
       const response = await axios.post(
         `${config.API_BASE}/api/recognize-face`,
         { image: photo.base64 },
-        {
-          timeout: 15000,
-          headers: { "Content-Type": "application/json" },
-        }
+        { timeout: 15000 }
       );
 
       const data = response.data;
@@ -105,8 +114,7 @@ let timer: any;
 
       setStudentData(data);
       setShowModal(true);
-    } catch (err: any) {
-      console.log("SCAN ERROR:", err?.message);
+    } catch {
       Alert.alert("Error", "Backend not reachable");
     } finally {
       setIsScanning(false);
@@ -131,10 +139,7 @@ let timer: any;
           action: studentData.action,
           purpose: studentData.action === "EXIT" ? purpose : null,
         },
-        {
-          timeout: 15000,
-          headers: { "Content-Type": "application/json" },
-        }
+        { timeout: 15000 }
       );
 
       const timeNow = new Date().toLocaleString();
@@ -156,8 +161,7 @@ let timer: any;
       setShowModal(false);
       setShowSuccessModal(true);
       setPurpose("");
-    } catch (err: any) {
-      console.log("CONFIRM ERROR:", err?.message);
+    } catch {
       Alert.alert("Error", "Failed to save entry / exit");
     } finally {
       setIsSubmitting(false);
@@ -174,36 +178,43 @@ let timer: any;
       <View style={styles.header}>
         <Image source={require("./iiitdmj_logo.jpg")} style={styles.logo} />
 
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.headerTitle}>
-            PDPM IIITDMJ Entry–Exit Portal
+            PDPM IIITDMJ Entry–Exit App
           </Text>
-          <Text style={styles.headerSubtitle}>
-            Student Monitoring System
-          </Text>
-        </View>
 
-        {/* ✅ SERVER STATUS UI */}
-        <View style={{ marginLeft: "auto" }}>
-          <Text
-            style={{
-              color:
-                serverStatus === "online"
-                  ? "lightgreen"
-                  : serverStatus === "offline"
-                  ? "red"
-                  : "yellow",
-              fontWeight: "bold",
-              fontSize: 12,
-            }}
-          >
-            ●{" "}
-            {serverStatus === "checking"
-              ? "Checking..."
-              : serverStatus === "online"
-              ? "Online"
-              : "Offline"}
-          </Text>
+          <View style={styles.subRow}>
+            <Text style={styles.headerSubtitle}>
+              Student Monitoring System
+            </Text>
+
+            <View style={styles.statusRow}>
+              <Text
+                style={[
+                  styles.statusText,
+                  serverStatus === "online"
+                    ? { color: "lightgreen" }
+                    : serverStatus === "offline"
+                    ? { color: "red" }
+                    : { color: "yellow" },
+                ]}
+              >
+                ●{" "}
+                {serverStatus === "checking"
+                  ? "Checking..."
+                  : serverStatus === "online"
+                  ? "Online"
+                  : "Offline"}
+              </Text>
+
+              <TouchableOpacity
+                onPress={checkServer}
+                disabled={serverStatus === "checking"}
+              >
+                <Text style={styles.retry}>↻</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </View>
 
@@ -231,20 +242,16 @@ let timer: any;
         </>
       ) : (
         <View style={styles.startContainer}>
-          {/* ✅ MODIFIED BUTTON */}
           <TouchableOpacity
             style={[
               styles.startBtn,
               serverStatus !== "online" && { opacity: 0.5 },
             ]}
-            onPress={() => {
-              if (serverStatus === "online") {
-                setCameraActive(true);
-              } else {
-                Alert.alert("Server Offline", "Backend is not reachable");
-              }
-            }}
             disabled={serverStatus !== "online"}
+            onPress={() => {
+              if (serverStatus === "online") setCameraActive(true);
+              else Alert.alert("Server Offline", "Tap ↻ to retry connection");
+            }}
           >
             <Text style={styles.btnText}>
               {serverStatus === "checking"
@@ -279,6 +286,7 @@ let timer: any;
               <Text style={styles.label}>Status : </Text>
               {studentData?.action}
             </Text>
+
             {studentData?.action === "ENTRY" && (
               <>
                 <Text>
@@ -325,6 +333,7 @@ let timer: any;
           </View>
         </View>
       </Modal>
+
       {/* SUCCESS MODAL */}
       <Modal visible={showSuccessModal} transparent animationType="fade">
         <View style={styles.overlay}>
@@ -343,7 +352,6 @@ let timer: any;
               {savedData?.roll_no}
             </Text>
 
-            {/* ENTRY CASE */}
             {savedData?.action === "ENTRY" && (
               <>
                 <Text>
@@ -363,7 +371,6 @@ let timer: any;
               </>
             )}
 
-            {/* EXIT CASE */}
             {savedData?.action === "EXIT" && (
               <>
                 <Text>
@@ -510,5 +517,27 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     color: "#ccc",
     fontSize: 12,
+  },
+
+  subRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  statusText: {
+    fontSize: 12,
+    fontWeight: "bold",
+  },
+
+  retry: {
+    color: "#fff",
+    fontSize: 16,
+    marginLeft: 8,
   },
 });
