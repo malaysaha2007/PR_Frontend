@@ -1,3 +1,4 @@
 {
-  "API_BASE": "https://prbackend-production-b19a.up.railway.app"
+  "LOCAL_API": "http://192.168.0.102:8080",
+  "PRODUCTION_API": "https://web-production-46d79b.up.railway.app"
 }
